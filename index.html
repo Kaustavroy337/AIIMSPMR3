@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Doctor Token Display</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #f4f4f4;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+    }
+    .doctor-name {
+      font-size: 3rem;
+      font-weight: bold;
+      margin-bottom: 1rem;
+    }
+    .room-no {
+      font-size: 2rem;
+      margin-bottom: 2rem;
+    }
+    .token-label {
+      font-size: 2.5rem;
+      font-weight: 600;
+    }
+    .token-number {
+      font-size: 12rem; /* doubled from 6rem */
+      font-weight: bold;
+      margin-top: 0.5rem;
+      color: red; /* changed from #2c3e50 to red */
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container" id="display">
+    <div class="doctor-name" id="doctorName">Loading...</div>
+    <div class="room-no" id="roomNo"></div>
+    <div class="token-label">Token</div>
+    <div class="token-number" id="tokenNumber">--</div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://swseqntztxeqguvuhrmo.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN3c2VxbnR6dHhlcWd1dnVocm1vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ5ODYyNDAsImV4cCI6MjA2MDU2MjI0MH0.EsMdhQaGxr8VIQeW4hCF11zFYWRfA8nAButBj_F-_U8";
+    const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const TARGET_DOCTOR_NAME = "Dr. Rohit G";
+
+    async function fetchLatestToken() {
+      const { data, error } = await client
+        .from("running_token_details")
+        .select('"DOCTOR NAME", "ROOM NO", "TOKEN NUMBER", "CREATED AT"')
+        .eq("DOCTOR NAME", TARGET_DOCTOR_NAME)
+        .order("CREATED AT", { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error("Fetch error:", error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const latest = data[0];
+        document.getElementById("doctorName").textContent = latest["DOCTOR NAME"] || TARGET_DOCTOR_NAME;
+        document.getElementById("roomNo").textContent = `Room No: ${latest["ROOM NO"] || "--"}`;
+        document.getElementById("tokenNumber").textContent = latest["TOKEN NUMBER"] || "--";
+      } else {
+        document.getElementById("doctorName").textContent = TARGET_DOCTOR_NAME;
+        document.getElementById("roomNo").textContent = `Room No: --`;
+        document.getElementById("tokenNumber").textContent = "--";
+      }
+    }
+
+    window.onload = async () => {
+      await fetchLatestToken();
+
+      client
+        .channel("realtime:running_token_details")
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "running_token_details",
+          },
+          (payload) => {
+            if (payload.new["DOCTOR NAME"] === TARGET_DOCTOR_NAME) {
+              fetchLatestToken();
+            }
+          }
+        )
+        .subscribe();
+    };
+  </script>
+</body>
+</html>
